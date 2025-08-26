@@ -3,120 +3,247 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Laberinto con persecución</title>
+<title>Laberinto Móvil</title>
 <style>
-  body { margin: 0; display: flex; justify-content: center; align-items: center; flex-direction: column; background: #ddd; height: 100vh; }
-  canvas { background: #fff; display: block; margin-bottom: 10px; }
-  .buttons { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-  .buttons button { padding: 10px 15px; font-size: 18px; }
+body { margin:0; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; }
+canvas { background:#eee; display:block; margin:10px 0; border:2px solid #333; touch-action:none; }
+#controls { display:grid; grid-template-columns: repeat(3, 80px); gap:10px; justify-content:center; margin-bottom:10px; }
+button { font-size:28px; padding:15px; border-radius:8px; }
+#info { font-size:18px; margin-bottom:10px; text-align:center; }
+#upload { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-bottom:10px; }
 </style>
 </head>
 <body>
+<h1>Laberinto Móvil</h1>
 
-<canvas id="game" width="400" height="400"></canvas>
-<input type="file" id="playerImgInput" accept="image/*">
-<input type="file" id="chaserImgInput" accept="image/*">
+<div id="upload">
+  <label>Jugador: <input type="file" id="playerUpload" accept="image/*"></label>
+  <label>Perseguidor: <input type="file" id="chaserUpload" accept="image/*"></label>
+  <button id="startBtn">Start</button>
+  <button id="resetBtn">Reset</button>
+  <button id="regenBtn">Regenerar Laberinto</button>
+</div>
 
-<div class="buttons">
-  <button onclick="movePlayer('up')">↑</button>
-  <button onclick="movePlayer('left')">←</button>
-  <button onclick="movePlayer('down')">↓</button>
-  <button onclick="movePlayer('right')">→</button>
+<div id="info">
+  Tiempo: <span id="time">0</span> s | 
+  Nivel: <span id="level">1</span> | 
+  Velocidad: <span id="speed">0</span> | 
+  Vidas: <span id="lives">3</span>
+</div>
+
+<canvas id="game"></canvas>
+
+<div id="controls">
+  <div></div><button id="up">↑</button><div></div>
+  <button id="left">←</button><div></div><button id="right">→</button>
+  <div></div><button id="down">↓</button><div></div>
 </div>
 
 <script>
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let canvasSize = Math.min(window.innerWidth-20, window.innerHeight/2);
+canvas.width = canvasSize;
+canvas.height = canvasSize;
 
-const CELL_SIZE = 40;
-const ROWS = canvas.height / CELL_SIZE;
-const COLS = canvas.width / CELL_SIZE;
+const cols = 16;
+const rows = 16;
+let size = canvas.width / cols;
+
+let maze = [];
+let player = {x:1,y:1};
+let chaser = {x:cols-2,y:rows-2};
+let goal = {x:cols-2,y:1};
+let time = 0;
+let level = 1;
+let gameStarted = false;
+let loseCount = 0;
+let lives = 3;
+
+let chaserSpeed = 20;
+let chaserCounter = 0;
 
 let playerImg = new Image();
 let chaserImg = new Image();
 
-let playerPos = {x:0, y:0};
-let chaserPos = {x:ROWS-1, y:COLS-1};
+window.addEventListener("resize", ()=>{
+  canvasSize = Math.min(window.innerWidth-20, window.innerHeight/2);
+  canvas.width = canvasSize;
+  canvas.height = canvasSize;
+  size = canvas.width / cols;
+  draw();
+});
 
-// Laberinto
-let maze = [];
-for(let r=0;r<ROWS;r++){
-  maze[r] = [];
-  for(let c=0;c<COLS;c++){
-    maze[r][c] = Math.random() > 0.2 ? 0 : 1;
+// Subida de imágenes
+document.getElementById("playerUpload").addEventListener("change", function(e){
+  const file = e.target.files[0];
+  if(file){
+    const reader = new FileReader();
+    reader.onload = function(ev){ playerImg.src = ev.target.result; }
+    reader.readAsDataURL(file);
   }
-}
-maze[0][0] = 0; // Asegurar salida inicial
-maze[ROWS-1][COLS-1] = 0; // Asegurar salida del perseguidor
+});
+document.getElementById("chaserUpload").addEventListener("change", function(e){
+  const file = e.target.files[0];
+  if(file){
+    const reader = new FileReader();
+    reader.onload = function(ev){ chaserImg.src = ev.target.result; }
+    reader.readAsDataURL(file);
+  }
+});
 
-// Cargar imágenes
-document.getElementById('playerImgInput').addEventListener('change', function(e){
-  playerImg.src = URL.createObjectURL(e.target.files[0]);
-});
-document.getElementById('chaserImgInput').addEventListener('change', function(e){
-  chaserImg.src = URL.createObjectURL(e.target.files[0]);
-});
+// Laberinto aleatorio
+function generateMaze(){
+  maze = [];
+  for(let y=0;y<rows;y++){
+    maze[y]=[];
+    for(let x=0;x<cols;x++){
+      maze[y][x] = Math.random() < 0.2 ? 1 : 0;
+    }
+  }
+  maze[player.y][player.x]=0;
+  maze[chaser.y][chaser.x]=0;
+  maze[goal.y][goal.x]=0;
+}
 
 // Dibujar laberinto y personajes
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  for(let r=0;r<ROWS;r++){
-    for(let c=0;c<COLS;c++){
-      ctx.fillStyle = maze[r][c]===1 ? 'black' : 'white';
-      ctx.fillRect(c*CELL_SIZE,r*CELL_SIZE,CELL_SIZE,CELL_SIZE);
-      ctx.strokeStyle = 'gray';
-      ctx.strokeRect(c*CELL_SIZE,r*CELL_SIZE,CELL_SIZE,CELL_SIZE);
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      if(maze[y][x]==1) ctx.fillStyle="black", ctx.fillRect(x*size,y*size,size,size);
     }
   }
-  ctx.drawImage(playerImg, playerPos.y*CELL_SIZE, playerPos.x*CELL_SIZE, CELL_SIZE, CELL_SIZE);
-  ctx.drawImage(chaserImg, chaserPos.y*CELL_SIZE, chaserPos.x*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+  ctx.fillStyle="green"; ctx.fillRect(goal.x*size, goal.y*size, size, size);
+  if(playerImg.complete && playerImg.src) ctx.drawImage(playerImg, player.x*size, player.y*size, size, size);
+  else ctx.fillStyle="blue", ctx.fillRect(player.x*size, player.y*size, size, size);
+  if(chaserImg.complete && chaserImg.src) ctx.drawImage(chaserImg, chaser.x*size, chaser.y*size, size, size);
+  else ctx.fillStyle="red", ctx.fillRect(chaser.x*size, chaser.y*size, size, size);
 }
 
-// Movimiento jugador con teclado
-document.addEventListener('keydown', function(e){
-  if(e.key === 'ArrowLeft') movePlayer('left');
-  if(e.key === 'ArrowRight') movePlayer('right');
-  if(e.key === 'ArrowUp') movePlayer('up');
-  if(e.key === 'ArrowDown') movePlayer('down');
+// Movimiento jugador
+function movePlayer(dx,dy){
+  if(!gameStarted) return;
+  let nx = player.x+dx, ny = player.y+dy;
+  if(nx>=0 && nx<cols && ny>=0 && ny<rows && maze[ny][nx]==0){
+    player.x=nx; player.y=ny; checkGoal();
+  }
+}
+
+// Meta
+function checkGoal(){
+  if(player.x==goal.x && player.y==goal.y){
+    level++;
+    document.getElementById("level").innerText = level;
+    alert("¡Nivel completado!");
+    nextLevel();
+  }
+}
+
+// Siguiente nivel
+function nextLevel(){
+  loseCount = 0; lives=3;
+  document.getElementById("regenBtn").disabled = false;
+  document.getElementById("lives").innerText = lives;
+  if(level%5===0 && chaserSpeed>5) chaserSpeed-=2;
+  document.getElementById("speed").innerText = 25 - chaserSpeed;
+  goal.x = Math.floor(Math.random()*cols);
+  goal.y = Math.floor(Math.random()*rows);
+  while(maze[goal.y][goal.x]==1){
+    goal.x = Math.floor(Math.random()*cols);
+    goal.y = Math.floor(Math.random()*rows);
+  }
+  player={x:1,y:1};
+  chaser={x:cols-2,y:rows-2};
+  generateMaze();
+}
+
+// Reset completo
+function fullReset(){
+  level=1; chaserSpeed=20; time=0; loseCount=0; lives=3;
+  document.getElementById("regenBtn").disabled = false;
+  document.getElementById("level").innerText = level;
+  document.getElementById("speed").innerText = 25 - chaserSpeed;
+  document.getElementById("time").innerText = time;
+  document.getElementById("lives").innerText = lives;
+  player={x:1,y:1}; chaser={x:cols-2,y:rows-2};
+  generateMaze();
+}
+
+// Tiempo
+setInterval(()=>{ if(gameStarted){ time++; document.getElementById("time").innerText=time; } },1000);
+
+// BFS perseguidor
+function bfs(start,target){
+  let queue=[{x:start.x,y:start.y,path:[]}];
+  let visited = Array.from({length:rows}, ()=>Array(cols).fill(false));
+  visited[start.y][start.x]=true;
+  while(queue.length>0){
+    let curr = queue.shift();
+    if(curr.x==target.x && curr.y==target.y) return curr.path;
+    let moves = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+    for(let m of moves){
+      let nx=curr.x+m.x, ny=curr.y+m.y;
+      if(nx>=0 && nx<cols && ny>=0 && ny<rows && maze[ny][nx]==0 && !visited[ny][nx]){
+        visited[ny][nx]=true;
+        queue.push({x:nx,y:ny,path:curr.path.concat([{x:nx,y:ny}])});
+      }
+    }
+  }
+  return [];
+}
+
+// Perseguidor
+function moveChaser(){
+  if(!gameStarted) return;
+  chaserCounter++;
+  if(chaserCounter % chaserSpeed !==0) return;
+  let path=bfs(chaser,player);
+  if(path.length>0){ chaser.x=path[0].x; chaser.y=path[0].y; }
+  if(player.x==chaser.x && player.y==chaser.y){
+    alert("¡Te atraparon!");
+    gameStarted=false;
+    loseCount++;
+    lives--;
+    document.getElementById("lives").innerText = lives;
+    if(loseCount>=3){
+      document.getElementById("regenBtn").disabled = true;
+      alert("¡Ya no puedes regenerar el laberinto, perdiste 3 veces!");
+    }
+  }
+}
+
+// Controles táctiles y teclado
+document.getElementById("up").onclick = ()=>movePlayer(0,-1);
+document.getElementById("down").onclick = ()=>movePlayer(0,1);
+document.getElementById("left").onclick = ()=>movePlayer(-1,0);
+document.getElementById("right").onclick = ()=>movePlayer(1,0);
+document.addEventListener("keydown",(e)=>{
+  if(e.key=="ArrowUp") movePlayer(0,-1);
+  if(e.key=="ArrowDown") movePlayer(0,1);
+  if(e.key=="ArrowLeft") movePlayer(-1,0);
+  if(e.key=="ArrowRight") movePlayer(1,0);
 });
 
-// Movimiento jugador con botones táctiles
-function movePlayer(dir){
-  let {x,y} = playerPos;
-  if(dir==='up' && x>0 && maze[x-1][y]===0) playerPos.x--;
-  if(dir==='down' && x<ROWS-1 && maze[x+1][y]===0) playerPos.x++;
-  if(dir==='left' && y>0 && maze[x][y-1]===0) playerPos.y--;
-  if(dir==='right' && y<COLS-1 && maze[x][y+1]===0) playerPos.y++;
-}
-
-// Movimiento del perseguidor
-function moveChaser(){
-  let dx = playerPos.x - chaserPos.x;
-  let dy = playerPos.y - chaserPos.y;
-
-  if(Math.abs(dx) > Math.abs(dy)){
-    if(dx>0 && maze[chaserPos.x+1][chaserPos.y]===0) chaserPos.x++;
-    else if(dx<0 && maze[chaserPos.x-1][chaserPos.y]===0) chaserPos.x--;
-  } else {
-    if(dy>0 && maze[chaserPos.x][chaserPos.y+1]===0) chaserPos.y++;
-    else if(dy<0 && maze[chaserPos.x][chaserPos.y-1]===0) chaserPos.y--;
+// Botones
+document.getElementById("startBtn").addEventListener("click", ()=>{ if(!gameStarted){ gameStarted=true; alert("¡Juego iniciado!"); } });
+document.getElementById("resetBtn").addEventListener("click", ()=>{ fullReset(); gameStarted=false; });
+document.getElementById("regenBtn").addEventListener("click", ()=>{
+  if(lives>0){
+    player={x:1,y:1};
+    chaser={x:cols-2,y:rows-2};
+    goal={x:cols-2,y:1};
+    generateMaze();
+    draw();
+    alert("Nuevo laberinto generado para este nivel.");
   }
-}
+});
 
-function gameLoop(){
-  moveChaser();
-  draw();
-  if(playerPos.x === chaserPos.x && playerPos.y === chaserPos.y){
-    alert("¡Has sido atrapado!");
-    playerPos = {x:0, y:0};
-    chaserPos = {x:ROWS-1, y:COLS-1};
-  }
-  requestAnimationFrame(gameLoop);
-}
+generateMaze();
+draw();
 
+function gameLoop(){ moveChaser(); draw(); requestAnimationFrame(gameLoop); }
 gameLoop();
 </script>
-
 </body>
 </html>
-
