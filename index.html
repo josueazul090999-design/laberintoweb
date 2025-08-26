@@ -3,18 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Laberinto Móvil</title>
+<title>Laberinto Móvil Mejorado</title>
 <style>
 body { margin:0; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; }
 canvas { background:#eee; display:block; margin:10px 0; border:2px solid #333; touch-action:none; }
-#controls { display:grid; grid-template-columns: repeat(3, 80px); gap:10px; justify-content:center; margin-bottom:10px; }
-button { font-size:28px; padding:15px; border-radius:8px; }
+#controls { display:grid; grid-template-columns: repeat(3, 60px); gap:5px; justify-content:center; margin-bottom:10px; }
+button { font-size:20px; padding:8px; border-radius:6px; }
 #info { font-size:18px; margin-bottom:10px; text-align:center; }
 #upload { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-bottom:10px; }
 </style>
 </head>
 <body>
-<h1>Laberinto Móvil</h1>
+<h1>Laberinto Móvil Mejorado</h1>
 
 <div id="upload">
   <label>Jugador: <input type="file" id="playerUpload" accept="image/*"></label>
@@ -42,12 +42,12 @@ button { font-size:28px; padding:15px; border-radius:8px; }
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-let canvasSize = Math.min(window.innerWidth-20, window.innerHeight/2);
-canvas.width = canvasSize;
-canvas.height = canvasSize;
 
 const cols = 16;
 const rows = 16;
+let canvasSize = Math.min(window.innerWidth-20, window.innerHeight*0.7);
+canvas.width = canvasSize;
+canvas.height = canvasSize;
 let size = canvas.width / cols;
 
 let maze = [];
@@ -67,7 +67,7 @@ let playerImg = new Image();
 let chaserImg = new Image();
 
 window.addEventListener("resize", ()=>{
-  canvasSize = Math.min(window.innerWidth-20, window.innerHeight/2);
+  canvasSize = Math.min(window.innerWidth-20, window.innerHeight*0.7);
   canvas.width = canvasSize;
   canvas.height = canvasSize;
   size = canvas.width / cols;
@@ -92,7 +92,7 @@ document.getElementById("chaserUpload").addEventListener("change", function(e){
   }
 });
 
-// Laberinto aleatorio
+// Generar laberinto
 function generateMaze(){
   maze = [];
   for(let y=0;y<rows;y++){
@@ -213,7 +213,7 @@ function moveChaser(){
   }
 }
 
-// Controles táctiles y teclado
+// Controles
 document.getElementById("up").onclick = ()=>movePlayer(0,-1);
 document.getElementById("down").onclick = ()=>movePlayer(0,1);
 document.getElementById("left").onclick = ()=>movePlayer(-1,0);
